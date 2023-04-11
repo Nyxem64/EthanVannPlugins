@@ -1,6 +1,7 @@
 package com.example.Nyxem.OneClick;
 
 import com.example.EthanApiPlugin.EthanApiPlugin;
+import com.example.EthanApiPlugin.Inventory;
 import com.example.Packets.MousePackets;
 import com.example.Packets.WidgetPackets;
 import com.google.inject.Provides;
@@ -74,23 +75,45 @@ public class OneClickPlugin extends Plugin
 			int firstItemID = Integer.parseInt(firstItemParse);
 			int secondItemID = Integer.parseInt(secondItemParse); // thought I needed these for something
 
-			log.info("trying menus");
-			Widget item1 = EthanApiPlugin.getItem(firstItemID, WidgetInfo.INVENTORY);
-			Widget item2 = EthanApiPlugin.getItem(secondItemID, WidgetInfo.INVENTORY);
-
-			if (client.getLocalPlayer().getAnimation() != -1 || EthanApiPlugin.isMoving())
+			if (client.getLocalPlayer().getAnimation() != -1 || EthanApiPlugin.isMoving()) {
+				log.info("moving or animations");
 				return;
+			}
 
-			if (client.getMouseCurrentButton() != 0 )
-				ItemOnItem(item1, item2);
+			if (client.getMouseCurrentButton() != 0 ) {
+				log.info("trying item on item");
+				ItemOnItem(firstItemID, secondItemID);
+			}
 
 		}
 	}
 
-	private void ItemOnItem(Widget widget1, Widget widget2)
-	{
-		MousePackets.queueClickPacket();
-		WidgetPackets.queueWidgetOnWidget(widget1, widget2);
+	private boolean ItemOnItem(int firstID, int secondID) {
+
+		if (!Inventory.search().withId(firstID).empty()) {
+			if (!Inventory.search().withId(secondID).empty()) {
+				log.info("items true, trying");
+				Widget item1 = EthanApiPlugin.getItem(firstID, WidgetInfo.INVENTORY);
+				Widget item2 = EthanApiPlugin.getItem(secondID, WidgetInfo.INVENTORY);
+				MousePackets.queueClickPacket();
+				WidgetPackets.queueWidgetOnWidget(item1, item2);
+				if (Inventory.search().withId(firstID).empty())
+					return true;
+				if (Inventory.search().withId(secondID).empty())
+					return true;
+
+				log.info("trying items again");
+				MousePackets.queueClickPacket();
+				WidgetPackets.queueWidgetOnWidget(item2, item1);
+				if (Inventory.search().withId(firstID).empty())
+					return true;
+				return Inventory.search().withId(secondID).empty();
+			}
+			log.info("item 2 false");
+		}
+		log.info("item 1 false");
+		return false;
+
 	}
 	@Provides
 	OneClickConfig provideConfig(ConfigManager configManager) {
