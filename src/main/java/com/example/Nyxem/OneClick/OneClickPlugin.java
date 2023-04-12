@@ -3,6 +3,7 @@ package com.example.Nyxem.OneClick;
 import com.example.EthanApiPlugin.EthanApiPlugin;
 import com.example.EthanApiPlugin.Inventory;
 import com.example.Packets.MousePackets;
+import com.example.Packets.ObjectPackets;
 import com.example.Packets.WidgetPackets;
 import com.google.inject.Provides;
 import com.google.inject.Inject;
@@ -34,8 +35,7 @@ public class OneClickPlugin extends Plugin
 	@Inject
 	private OneClickConfig config;
 
-	private boolean menu1created = false;
-	private boolean menu2created = false;
+	private boolean customItemMenuCreated = false;
 
 	@Override
 	protected void startUp() throws Exception {
@@ -55,16 +55,17 @@ public class OneClickPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onGameTick(GameTick tiktok) {
-
-		if (config.isCustomItemOneClickEnabled()) {
-			handleItemAction(config.getCustomItemIDs());
-		}
+	private void onMenuEntryAdded(MenuEntryAdded event)
+	{
+		MenuEntry[] menuEntries = this.client.getMenuEntries();
+		insertMenu(menuEntries);
 	}
 
-	private void handleItemAction(String actionParam) {
 
-		String[] Actions = actionParam.split("\n");
+	private void onMenuOptionClicked()
+	{
+		log.info("One Click clicked");
+		String[] Actions = config.getCustomItemIDs().split("\n");
 		for (String Action : Actions) {
 			if (!Action.contains(":")) {
 				continue;
@@ -73,18 +74,61 @@ public class OneClickPlugin extends Plugin
 			String secondItemParse = Action.split(":")[1];
 
 			int firstItemID = Integer.parseInt(firstItemParse);
-			int secondItemID = Integer.parseInt(secondItemParse); // thought I needed these for something
+			int secondItemID = Integer.parseInt(secondItemParse);
 
 			if (client.getLocalPlayer().getAnimation() != -1 || EthanApiPlugin.isMoving()) {
 				log.info("moving or animations");
 				return;
 			}
 
-			if (client.getMouseCurrentButton() != 0 ) {
+			if (client.getMouseCurrentButton() != 0) {
 				log.info("trying item on item");
 				ItemOnItem(firstItemID, secondItemID);
+				customItemMenuCreated = false;
 			}
+		}
+	}
 
+	@Subscribe
+	public void onGameTick(GameTick tiktok) {
+
+
+	}
+
+	@Subscribe
+	public void onClientTick(ClientTick urtiktok) {
+
+		if (this.client.getGameState() != GameState.LOGGED_IN || this.client.isMenuOpen())
+			return;
+
+		boolean customItemOnIteming = config.isCustomItemEnabled();
+		boolean customItemOnObject = config.isCustomItemOnObjectEnabled();
+
+		MenuEntry testMenu = null;
+		if (customItemOnIteming)
+		{
+			if(!customItemMenuCreated) {
+				testMenu = client.createMenuEntry(-1)
+						.setOption("One Click Item")
+						.onClick(me -> onMenuOptionClicked());
+			}else {
+				customItemMenuCreated = false;
+			}
+		}
+
+		if(customItemOnObject) {
+			// create Item on Object stuff
+		}
+	}
+
+	private void insertMenu(MenuEntry[] newMenu) {
+		for (MenuEntry menuEntry : newMenu) {
+			if (menuEntry.getTarget().contains("One Click")) {
+				MenuEntry[] newEntries = new MenuEntry[1];
+				newEntries[0] = menuEntry;
+				this.client.setMenuEntries(newEntries);
+				customItemMenuCreated = true;
+			}
 		}
 	}
 

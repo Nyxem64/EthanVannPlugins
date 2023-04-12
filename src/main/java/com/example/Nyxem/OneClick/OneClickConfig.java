@@ -22,7 +22,7 @@ public interface OneClickConfig extends Config
 			description = "Turn Custom Item One Clicks on or off",
 			section = customItemsConfig
 	)
-	default boolean isCustomItemOneClickEnabled() { return true; }
+	default boolean isCustomItemEnabled() { return true; }
 
 	@ConfigItem(
 		position = 1,
@@ -32,4 +32,30 @@ public interface OneClickConfig extends Config
 		section = customItemsConfig
 	)
 	default String getCustomItemIDs() { return "0:0"; }
+
+	@ConfigSection(
+			position = 0,
+			name = "Custom Item on Object Config",
+			description = ""
+	)
+	String customItemOnObjectConfig = "Custom Item on Objecy Config";
+
+	@ConfigItem(
+			position = 0,
+			keyName = "customItemOnObjectToggle",
+			name = "Custom Item on Object Toggle",
+			description = "Turn Custom Item on Object One Clicks on or off",
+			section = customItemOnObjectConfig
+	)
+	default boolean isCustomItemOnObjectEnabled() { return true; }
+
+	@ConfigItem(
+			position = 1,
+			keyName = "customItemOnObjectIDs",
+			name = "Custom Item on ObjectIDs",
+			description = "Enter item ids and object ids. Format itemid:objectid. Toggle must be on. EthanApiPlugin and Packet Utils must be on.",
+			section = customItemOnObjectConfig
+	)
+	default String getCustomItemOnObjectIDs() { return "0:0"; }
+
 }
