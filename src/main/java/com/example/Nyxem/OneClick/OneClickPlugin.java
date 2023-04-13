@@ -2,11 +2,14 @@ package com.example.Nyxem.OneClick;
 
 import com.example.EthanApiPlugin.EthanApiPlugin;
 import com.example.EthanApiPlugin.Inventory;
+import com.example.EthanApiPlugin.ItemQuery;
+import com.example.PacketUtilsPlugin;
 import com.example.Packets.MousePackets;
 import com.example.Packets.ObjectPackets;
 import com.example.Packets.WidgetPackets;
 import com.google.inject.Provides;
 import com.google.inject.Inject;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
@@ -17,14 +20,18 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
+import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 
 @Slf4j
 @PluginDescriptor(
 		name = "Nyxem One Click",
 		description = "Nyxem's One Clicks",
+		enabledByDefault = false,
 		tags = "nyxem"
 )
+@PluginDependency(PacketUtilsPlugin.class)
+@PluginDependency(EthanApiPlugin.class)
 public class OneClickPlugin extends Plugin
 {
 	@Inject
@@ -36,14 +43,22 @@ public class OneClickPlugin extends Plugin
 	private OneClickConfig config;
 
 	private boolean customItemMenuCreated = false;
+	private boolean attemptedItem1on2 = false;
+	int timeout = 0;
 
 	@Override
 	protected void startUp() throws Exception {
+		timeout = 0;
+		customItemMenuCreated = false;
+		attemptedItem1on2 = false;
 		log.info("Nyxem Plugin Start");
 	}
 
 	@Override
 	protected void shutDown() throws Exception {
+		timeout = 0;
+		customItemMenuCreated = false;
+		attemptedItem1on2 = false;
 		log.info("Nyxem Plugin stopped!");
 	}
 
@@ -55,110 +70,151 @@ public class OneClickPlugin extends Plugin
 	}
 
 	@Subscribe
-	private void onMenuEntryAdded(MenuEntryAdded event)
-	{
-		MenuEntry[] menuEntries = this.client.getMenuEntries();
+	private void onMenuEntryAdded(MenuEntryAdded event) {
+
+		MenuEntry[] menuEntries = client.getMenuEntries();
 		insertMenu(menuEntries);
-	}
 
-
-	private void onMenuOptionClicked()
-	{
-		log.info("One Click clicked");
-		String[] Actions = config.getCustomItemIDs().split("\n");
-		for (String Action : Actions) {
-			if (!Action.contains(":")) {
-				continue;
-			}
-			String firstItemParse = Action.split(":")[0];
-			String secondItemParse = Action.split(":")[1];
-
-			int firstItemID = Integer.parseInt(firstItemParse);
-			int secondItemID = Integer.parseInt(secondItemParse);
-
-			if (client.getLocalPlayer().getAnimation() != -1 || EthanApiPlugin.isMoving()) {
-				log.info("moving or animations");
-				return;
-			}
-
-			if (client.getMouseCurrentButton() != 0) {
-				log.info("trying item on item");
-				ItemOnItem(firstItemID, secondItemID);
-				customItemMenuCreated = false;
-			}
-		}
 	}
 
 	@Subscribe
+	@SneakyThrows
 	public void onGameTick(GameTick tiktok) {
 
+		if (client.getGameState() != GameState.LOGGED_IN || client.isMenuOpen())
+			return;
+
+		if (timeout > 0) {
+			log.info("timeout reduction");
+			timeout--;
+			return;
+		}
 
 	}
 
 	@Subscribe
 	public void onClientTick(ClientTick urtiktok) {
 
-		if (this.client.getGameState() != GameState.LOGGED_IN || this.client.isMenuOpen())
+		if (client.getGameState() != GameState.LOGGED_IN || client.isMenuOpen())
 			return;
 
-		boolean customItemOnIteming = config.isCustomItemEnabled();
+		if (timeout > 0)
+			return;
+
+		boolean customItemOnItem = config.isCustomItemEnabled();
 		boolean customItemOnObject = config.isCustomItemOnObjectEnabled();
 
-		MenuEntry testMenu = null;
-		if (customItemOnIteming)
-		{
-			if(!customItemMenuCreated) {
-				testMenu = client.createMenuEntry(-1)
-						.setOption("One Click Item")
-						.onClick(me -> onMenuOptionClicked());
-			}else {
-				customItemMenuCreated = false;
+		if (customItemOnItem) {
+
+			String[] Actions = config.getCustomItemIDs().split("\n");
+
+			for (String Action : Actions) {
+
+				if (!Action.contains(":")) {
+					log.info("no ID separator :");
+					continue;
+				}
+
+				String firstItemParse = Action.split(":")[0];
+				String secondItemParse = Action.split(":")[1];
+
+				int firstItemID = Integer.parseInt(firstItemParse);
+				int secondItemID = Integer.parseInt(secondItemParse);
+
+				if (!customItemMenuCreated) {
+
+					//log.info("trying to create menu");
+
+					if (firstItemID == 0) {
+						log.info("item 1 null");
+						return;
+					}
+					if (secondItemID == 0) {
+						log.info("item 2 null");
+						return;
+					}
+
+					MenuEntry[] currentMenu = client.getMenuEntries();
+					for (MenuEntry currentEntry : currentMenu) {
+						if (currentEntry.getItemId() == firstItemID) {
+
+							log.info("create menu item 1");
+							MenuEntry oneClickItemMenu = client.createMenuEntry(-1)
+									.setOption("One Click Item")
+									.onClick(me -> ItemOnItem(firstItemID, secondItemID));
+
+						} else if (currentEntry.getItemId() == secondItemID) {
+							log.info("create menu item 2");
+							MenuEntry oneClickItemMenu = client.createMenuEntry(-1)
+									.setOption("One Click Item")
+									.onClick(me -> ItemOnItem(secondItemID, firstItemID));
+						}
+					}
+				} else {
+					customItemMenuCreated = false;
+				}
 			}
 		}
 
-		if(customItemOnObject) {
+		if (customItemOnObject) {
 			// create Item on Object stuff
 		}
 	}
 
-	private void insertMenu(MenuEntry[] newMenu) {
-		for (MenuEntry menuEntry : newMenu) {
-			if (menuEntry.getTarget().contains("One Click")) {
-				MenuEntry[] newEntries = new MenuEntry[1];
+	private void functionNameA(){
+
+	}
+
+	private void insertMenu(MenuEntry[] currentMenu) {
+
+		if (customItemMenuCreated) return;
+
+		for (MenuEntry menuEntry : currentMenu) {
+			if (menuEntry.getOption().contains("One Click Item")) {
+				MenuEntry[] newEntries = new MenuEntry[currentMenu.length];
 				newEntries[0] = menuEntry;
-				this.client.setMenuEntries(newEntries);
+				System.arraycopy(currentMenu, 0, newEntries, 1, currentMenu.length - 1);
+
+				log.info("insert menu function");
+				client.setMenuEntries(newEntries);
 				customItemMenuCreated = true;
+				break;
 			}
 		}
 	}
 
-	private boolean ItemOnItem(int firstID, int secondID) {
+	private void ItemOnItem(int firstID, int secondID) {
 
 		if (!Inventory.search().withId(firstID).empty()) {
 			if (!Inventory.search().withId(secondID).empty()) {
+
 				log.info("items true, trying");
 				Widget item1 = EthanApiPlugin.getItem(firstID, WidgetInfo.INVENTORY);
 				Widget item2 = EthanApiPlugin.getItem(secondID, WidgetInfo.INVENTORY);
+
+				if (item1 == null) {
+					log.info("items 1 null");
+					return;
+				}
+
+				if (item2 == null) {
+					log.info("items 2 null");
+					return;
+				}
+
 				MousePackets.queueClickPacket();
 				WidgetPackets.queueWidgetOnWidget(item1, item2);
-				if (Inventory.search().withId(firstID).empty())
-					return true;
-				if (Inventory.search().withId(secondID).empty())
-					return true;
+				timeout = 2;
+				return;
 
-				log.info("trying items again");
-				MousePackets.queueClickPacket();
-				WidgetPackets.queueWidgetOnWidget(item2, item1);
-				if (Inventory.search().withId(firstID).empty())
-					return true;
-				return Inventory.search().withId(secondID).empty();
 			}
 			log.info("item 2 false");
 		}
 		log.info("item 1 false");
-		return false;
+		return;
 
 	}
+
 	@Provides
 	OneClickConfig provideConfig(ConfigManager configManager) {
 		return configManager.getConfig(OneClickConfig.class);
