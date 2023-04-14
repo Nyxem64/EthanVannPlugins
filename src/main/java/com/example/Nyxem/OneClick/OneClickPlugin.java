@@ -2,7 +2,6 @@ package com.example.Nyxem.OneClick;
 
 import com.example.EthanApiPlugin.EthanApiPlugin;
 import com.example.EthanApiPlugin.Inventory;
-import com.example.EthanApiPlugin.ItemQuery;
 import com.example.PacketUtilsPlugin;
 import com.example.Packets.MousePackets;
 import com.example.Packets.ObjectPackets;
@@ -15,13 +14,14 @@ import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
+
+import java.util.Optional;
 
 @Slf4j
 @PluginDescriptor(
@@ -38,27 +38,23 @@ public class OneClickPlugin extends Plugin
 	private Client client;
 	@Inject
 	private ClientThread clientThread;
-
 	@Inject
 	private OneClickConfig config;
 
 	private boolean customItemMenuCreated = false;
-	private boolean attemptedItem1on2 = false;
 	int timeout = 0;
 
 	@Override
 	protected void startUp() throws Exception {
 		timeout = 0;
 		customItemMenuCreated = false;
-		attemptedItem1on2 = false;
 		log.info("Nyxem Plugin Start");
 	}
 
 	@Override
-	protected void shutDown() throws Exception {
+	protected void shutDown() {
 		timeout = 0;
 		customItemMenuCreated = false;
-		attemptedItem1on2 = false;
 		log.info("Nyxem Plugin stopped!");
 	}
 
@@ -74,6 +70,25 @@ public class OneClickPlugin extends Plugin
 
 		MenuEntry[] menuEntries = client.getMenuEntries();
 		insertMenu(menuEntries);
+
+	}
+
+	@SneakyThrows
+	private void onMenuOptionClicked(MenuEntry entry) {
+
+		if (!entry.getOption().equals("One Click Item")){
+			log.info("Not One Click");
+			return;
+		}
+
+		if (entry.getOption().equals("One Click Item")){
+
+			log.info("One Click item clicked");
+
+			itemOnItem(entry.getParam0(), entry.getParam1());
+			return;
+		}
+
 
 	}
 
@@ -93,6 +108,7 @@ public class OneClickPlugin extends Plugin
 	}
 
 	@Subscribe
+	@SneakyThrows
 	public void onClientTick(ClientTick urtiktok) {
 
 		if (client.getGameState() != GameState.LOGGED_IN || client.isMenuOpen())
@@ -127,28 +143,38 @@ public class OneClickPlugin extends Plugin
 
 					if (firstItemID == 0) {
 						log.info("item 1 null");
-						return;
+						continue;
 					}
 					if (secondItemID == 0) {
 						log.info("item 2 null");
-						return;
+						continue;
 					}
+
+					log.info("Log2");
 
 					MenuEntry[] currentMenu = client.getMenuEntries();
 					for (MenuEntry currentEntry : currentMenu) {
 						if (currentEntry.getItemId() == firstItemID) {
-
 							log.info("create menu item 1");
-							MenuEntry oneClickItemMenu = client.createMenuEntry(-1)
+							client.createMenuEntry(-1)
 									.setOption("One Click Item")
-									.onClick(me -> ItemOnItem(firstItemID, secondItemID));
+									.setType(MenuAction.CC_OP)
+									.setParam0(firstItemID)
+									.setParam1(secondItemID)
+									.onClick(this::onMenuOptionClicked);
+							return;
 
 						} else if (currentEntry.getItemId() == secondItemID) {
 							log.info("create menu item 2");
-							MenuEntry oneClickItemMenu = client.createMenuEntry(-1)
+							client.createMenuEntry(-1)
 									.setOption("One Click Item")
-									.onClick(me -> ItemOnItem(secondItemID, firstItemID));
+									.setType(MenuAction.CC_OP)
+									.setParam0(secondItemID)
+									.setParam1(firstItemID)
+									.onClick(this::onMenuOptionClicked);
+							return;
 						}
+
 					}
 				} else {
 					customItemMenuCreated = false;
@@ -158,10 +184,8 @@ public class OneClickPlugin extends Plugin
 
 		if (customItemOnObject) {
 			// create Item on Object stuff
+			log.info("Log6");
 		}
-	}
-
-	private void functionNameA(){
 
 	}
 
@@ -171,48 +195,44 @@ public class OneClickPlugin extends Plugin
 
 		for (MenuEntry menuEntry : currentMenu) {
 			if (menuEntry.getOption().contains("One Click Item")) {
-				MenuEntry[] newEntries = new MenuEntry[currentMenu.length];
-				newEntries[0] = menuEntry;
-				System.arraycopy(currentMenu, 0, newEntries, 1, currentMenu.length - 1);
-
+				log.info("Log7");
+				MenuEntry tempMenu = menuEntry;
+				System.arraycopy(currentMenu, 0, currentMenu, 1, currentMenu.length);
+				currentMenu[0] = tempMenu;
 				log.info("insert menu function");
-				client.setMenuEntries(newEntries);
 				customItemMenuCreated = true;
+				log.info("Log8");
+				client.setMenuEntries(currentMenu);
 				break;
 			}
 		}
 	}
 
-	private void ItemOnItem(int firstID, int secondID) {
+	@SneakyThrows
+	private void itemOnItem(int firstID, int secondID) {
 
-		if (!Inventory.search().withId(firstID).empty()) {
-			if (!Inventory.search().withId(secondID).empty()) {
+		log.info("item on item :)");
+		log.info(String.valueOf(firstID));
+		log.info(String.valueOf(secondID));
 
-				log.info("items true, trying");
-				Widget item1 = EthanApiPlugin.getItem(firstID, WidgetInfo.INVENTORY);
-				Widget item2 = EthanApiPlugin.getItem(secondID, WidgetInfo.INVENTORY);
+		Optional<Widget> item1 = Inventory.search().withId(firstID).first();
+		Optional<Widget> item2 = Inventory.search().withId(secondID).first();
 
-				if (item1 == null) {
-					log.info("items 1 null");
-					return;
-				}
+		log.info("widgets found");
 
-				if (item2 == null) {
-					log.info("items 2 null");
-					return;
-				}
-
-				MousePackets.queueClickPacket();
-				WidgetPackets.queueWidgetOnWidget(item1, item2);
-				timeout = 2;
-				return;
-
-			}
-			log.info("item 2 false");
+		if (item1.isEmpty() || item2.isEmpty()){
+			EthanApiPlugin.stopPlugin(this);
+			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Items not found.", null);
+			return;
 		}
-		log.info("item 1 false");
-		return;
 
+		log.info(item1.toString());
+		log.info(item2.toString());
+
+		MousePackets.queueClickPacket();
+		WidgetPackets.queueWidgetOnWidget(item1.get(), item2.get());
+		timeout = 2;
+		log.info("Log9");
 	}
 
 	@Provides
