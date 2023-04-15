@@ -17,10 +17,12 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 
+import java.util.Objects;
 import java.util.Optional;
 
 @Slf4j
@@ -41,8 +43,11 @@ public class OneClickPlugin extends Plugin
 	@Inject
 	private OneClickConfig config;
 
+	@Inject
+	private ItemManager itemManager;
+
 	private boolean customItemMenuCreated = false;
-	int timeout = 0;
+	private int timeout = 0;
 
 	@Override
 	protected void startUp() throws Exception {
@@ -73,42 +78,38 @@ public class OneClickPlugin extends Plugin
 
 	}
 
-	@SneakyThrows
-	private void onMenuOptionClicked(MenuEntry entry) {
+	private void onMenuOptionClicked(String name, int firstID, int secondID) {
 
-		if (!entry.getOption().equals("One Click Item")){
+		customItemMenuCreated = false;
+
+		if (!name.contains("One Click Item")){
 			log.info("Not One Click");
-			return;
-		}
-
-		if (entry.getOption().equals("One Click Item")){
-
+		}else {
 			log.info("One Click item clicked");
-
-			itemOnItem(entry.getParam0(), entry.getParam1());
+			itemOnItem(firstID, secondID);
 			return;
 		}
 
+		if (!name.contains("One Click Object")){
+			log.info("Not One Click Object");
+		}else {
+			log.info("One Click object clicked");
+			return;
+		}
 
 	}
 
 	@Subscribe
-	@SneakyThrows
 	public void onGameTick(GameTick tiktok) {
-
-		if (client.getGameState() != GameState.LOGGED_IN || client.isMenuOpen())
-			return;
 
 		if (timeout > 0) {
 			log.info("timeout reduction");
 			timeout--;
-			return;
 		}
 
 	}
 
 	@Subscribe
-	@SneakyThrows
 	public void onClientTick(ClientTick urtiktok) {
 
 		if (client.getGameState() != GameState.LOGGED_IN || client.isMenuOpen())
@@ -126,6 +127,9 @@ public class OneClickPlugin extends Plugin
 
 			for (String Action : Actions) {
 
+				if (customItemMenuCreated)
+					break;
+
 				if (!Action.contains(":")) {
 					log.info("no ID separator :");
 					continue;
@@ -137,47 +141,32 @@ public class OneClickPlugin extends Plugin
 				int firstItemID = Integer.parseInt(firstItemParse);
 				int secondItemID = Integer.parseInt(secondItemParse);
 
-				if (!customItemMenuCreated) {
+				if (Inventory.search().withId(firstItemID).first().isEmpty()){
+					//client.addChatMessage(ChatMessageType.GAMEMESSAGE,"","Item 1 not found in inventory","");
+					continue;
+				}
 
-					//log.info("trying to create menu");
+				if (Inventory.search().withId(secondItemID).first().isEmpty()){
+					//client.addChatMessage(ChatMessageType.GAMEMESSAGE,"","Item 2 not found in inventory","");
+					continue;
+				}
 
-					if (firstItemID == 0) {
-						log.info("item 1 null");
+				MenuEntry[] currentMenu = client.getMenuEntries();
+				String optionName = "One Click Item ";
+				for (MenuEntry currentEntry : currentMenu) {
+
+					if (currentEntry.getItemId() != firstItemID && currentEntry.getItemId() != secondItemID){
 						continue;
 					}
-					if (secondItemID == 0) {
-						log.info("item 2 null");
-						continue;
-					}
 
-					log.info("Log2");
+					log.info("current entry is item");
 
-					MenuEntry[] currentMenu = client.getMenuEntries();
-					for (MenuEntry currentEntry : currentMenu) {
-						if (currentEntry.getItemId() == firstItemID) {
-							log.info("create menu item 1");
-							client.createMenuEntry(-1)
-									.setOption("One Click Item")
-									.setType(MenuAction.CC_OP)
-									.setParam0(firstItemID)
-									.setParam1(secondItemID)
-									.onClick(this::onMenuOptionClicked);
-							return;
-
-						} else if (currentEntry.getItemId() == secondItemID) {
-							log.info("create menu item 2");
-							client.createMenuEntry(-1)
-									.setOption("One Click Item")
-									.setType(MenuAction.CC_OP)
-									.setParam0(secondItemID)
-									.setParam1(firstItemID)
-									.onClick(this::onMenuOptionClicked);
-							return;
-						}
-
-					}
-				} else {
-					customItemMenuCreated = false;
+					client.createMenuEntry(-1)
+							.setOption(optionName + itemManager.getItemComposition(firstItemID).getName() + " -> " + itemManager.getItemComposition(secondItemID).getName())
+							.setType(MenuAction.CC_OP)
+							.onClick(me -> onMenuOptionClicked(optionName, firstItemID, secondItemID));
+					customItemMenuCreated = true;
+					break;
 				}
 			}
 		}
@@ -195,44 +184,29 @@ public class OneClickPlugin extends Plugin
 
 		for (MenuEntry menuEntry : currentMenu) {
 			if (menuEntry.getOption().contains("One Click Item")) {
-				log.info("Log7");
 				MenuEntry tempMenu = menuEntry;
 				System.arraycopy(currentMenu, 0, currentMenu, 1, currentMenu.length);
 				currentMenu[0] = tempMenu;
 				log.info("insert menu function");
 				customItemMenuCreated = true;
-				log.info("Log8");
 				client.setMenuEntries(currentMenu);
 				break;
 			}
 		}
 	}
 
-	@SneakyThrows
 	private void itemOnItem(int firstID, int secondID) {
 
-		log.info("item on item :)");
-		log.info(String.valueOf(firstID));
-		log.info(String.valueOf(secondID));
 
 		Optional<Widget> item1 = Inventory.search().withId(firstID).first();
 		Optional<Widget> item2 = Inventory.search().withId(secondID).first();
 
-		log.info("widgets found");
-
-		if (item1.isEmpty() || item2.isEmpty()){
-			EthanApiPlugin.stopPlugin(this);
-			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Items not found.", null);
+		if(item1.isEmpty() || item2.isEmpty())
 			return;
-		}
-
-		log.info(item1.toString());
-		log.info(item2.toString());
 
 		MousePackets.queueClickPacket();
 		WidgetPackets.queueWidgetOnWidget(item1.get(), item2.get());
 		timeout = 2;
-		log.info("Log9");
 	}
 
 	@Provides
